@@ -31,7 +31,20 @@ function buildWaterfallData(prediction) {
   }));
 }
 
-export default function XAIVisualization({ prediction }) {
+export default function XAIVisualization({ prediction, loading = false }) {
+
+  if (loading) {
+    return (
+      <section className={styles.card}>
+        <h2>XAI Visualization</h2>
+        <div className={styles.skeletonGrid}>
+          <div className={styles.skeletonCard} />
+          <div className={styles.skeletonCard} />
+        </div>
+      </section>
+    );
+  }
+
   if (!prediction) {
     return (
       <section className={styles.card}>
@@ -77,10 +90,13 @@ export default function XAIVisualization({ prediction }) {
           <div className={styles.chartWrap}>
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={waterfallData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="feature" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={65} />
-                <YAxis />
-                <Tooltip formatter={(value) => Number(value).toFixed(4)} />
+                <CartesianGrid stroke="rgba(148, 163, 184, 0.25)" strokeDasharray="3 3" />
+                <XAxis dataKey="feature" tick={{ fill: '#e2e8f0', fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={65} />
+                <YAxis tick={{ fill: '#cbd5e1', fontSize: 11 }} />
+                <Tooltip
+                  contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '10px', color: '#e2e8f0' }}
+                  formatter={(value) => Number(value).toFixed(4)}
+                />
                 <Bar dataKey="impactAbs" name="|SHAP Impact|">
                   {waterfallData.map((entry) => (
                     <Cell key={entry.feature} fill={entry.color} />

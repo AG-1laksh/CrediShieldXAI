@@ -116,3 +116,24 @@ This data enables future drift analysis, stability monitoring, and retraining tr
 - Add request tracing + structured logs for observability
 - Add integration tests for `/predict` and `/analytics`
 - Add feature store for consistent train/serve feature definitions
+
+## Troubleshooting
+
+If the dashboard shows **"Failed to fetch"**, use this checklist:
+
+1. **Backend process must be running**
+  - Start Uvicorn on `http://127.0.0.1:8000`.
+  - Verify by opening `http://127.0.0.1:8000/docs`.
+
+2. **Frontend and backend port consistency**
+  - Frontend default: `http://localhost:5173` (or `http://127.0.0.1:5173`).
+  - Backend default: `http://127.0.0.1:8000`.
+  - Frontend API client must call `http://127.0.0.1:8000/predict` explicitly.
+
+3. **CORS origin alignment**
+  - Backend CORS is configured for `http://localhost:5173` and `http://127.0.0.1:5173`.
+  - If Vite runs on a different port, add that origin to `backend/main.py`.
+
+4. **Inspect terminal/browser logs**
+  - Backend logs request validation errors and prediction exceptions.
+  - Frontend `fetch` catch blocks print exact request failure details in DevTools console.

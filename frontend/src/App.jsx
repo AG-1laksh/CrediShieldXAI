@@ -13,6 +13,7 @@ function App() {
   const [error, setError] = useState('');
   const [currentStep, setCurrentStep] = useState(0);
   const [simulationEnabled, setSimulationEnabled] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const updateField = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -26,6 +27,7 @@ function App() {
       setPrediction(result);
       return result;
     } catch (err) {
+      console.error('runPrediction failed in App', err);
       setError(err.message || 'Prediction failed unexpectedly.');
       return null;
     } finally {
@@ -37,6 +39,7 @@ function App() {
     const result = await runPrediction(formData);
     if (result) {
       setSimulationEnabled(true);
+      setDrawerOpen(true);
     }
   };
 
@@ -55,12 +58,13 @@ function App() {
   return (
     <div className={styles.container}>
       <header className={styles.header}>
-        <h1>CrediShield XAI Dashboard</h1>
-        <p>Explainable credit-risk scoring with SHAP reason codes and live What-If simulation.</p>
+        <h1>CrediShield XAI</h1>
+        <p>Premium explainable credit intelligence with real-time scenario simulation.</p>
       </header>
 
       <div className={styles.statusRow}>
-        <span className={styles.badge}>{simulationEnabled ? 'Simulation Active' : 'Assessment Mode'}</span>
+        <span className={styles.badge}>{simulationEnabled ? 'What-If Unlocked' : 'Assessment Mode'}</span>
+        <span className={styles.backend}>Backend: http://127.0.0.1:8000</span>
         {error ? <span className={styles.error}>{error}</span> : null}
       </div>
 
@@ -74,15 +78,29 @@ function App() {
           loading={loading}
         />
 
-        <XAIVisualization prediction={prediction} />
-
-        <WhatIfSimulator
-          formData={formData}
-          onScenarioChange={updateField}
-          isEnabled={simulationEnabled}
-          loading={loading}
-        />
+        <XAIVisualization prediction={prediction} loading={loading} />
       </main>
+
+      {simulationEnabled ? (
+        <button
+          type="button"
+          className={styles.drawerToggle}
+          onClick={() => setDrawerOpen((prev) => !prev)}
+        >
+          {drawerOpen ? 'Hide What-If Simulator' : 'Open What-If Simulator'}
+        </button>
+      ) : null}
+
+      {simulationEnabled ? (
+        <aside className={`${styles.drawer} ${drawerOpen ? styles.drawerOpen : ''}`}>
+          <WhatIfSimulator
+            formData={formData}
+            onScenarioChange={updateField}
+            isEnabled={simulationEnabled}
+            loading={loading}
+          />
+        </aside>
+      ) : null}
     </div>
   );
 }

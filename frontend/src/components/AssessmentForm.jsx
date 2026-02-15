@@ -52,17 +52,20 @@ const NUMERIC_FIELDS = new Set([
 function renderInput(field, value, onChange) {
   if (FORM_SELECT_OPTIONS[field]) {
     return (
-      <select
-        className={styles.input}
-        value={value}
-        onChange={(e) => onChange(field, e.target.value)}
-      >
-        {FORM_SELECT_OPTIONS[field].map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
+      <div className={styles.selectWrap}>
+        <select
+          className={`${styles.input} ${styles.selectInput}`}
+          value={value}
+          onChange={(e) => onChange(field, e.target.value)}
+        >
+          {FORM_SELECT_OPTIONS[field].map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+        <span className={styles.chevron}>▾</span>
+      </div>
     );
   }
 
@@ -86,12 +89,16 @@ export default function AssessmentForm({
   loading,
 }) {
   const step = STEP_GROUPS[currentStep];
+  const progressPct = ((currentStep + 1) / STEP_GROUPS.length) * 100;
 
   return (
     <section className={styles.card}>
       <header className={styles.header}>
         <h2>Assessment Form</h2>
         <p>Step {currentStep + 1} of {STEP_GROUPS.length}: {step.title}</p>
+        <div className={styles.progressTrack}>
+          <div className={styles.progressFill} style={{ width: `${progressPct}%` }} />
+        </div>
       </header>
 
       <div className={styles.grid}>

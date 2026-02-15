@@ -7,6 +7,7 @@ import joblib
 import numpy as np
 import pandas as pd
 import shap
+import xgboost as xgb
 from imblearn.over_sampling import SMOTE
 from sklearn.compose import ColumnTransformer
 from sklearn.datasets import fetch_openml
@@ -117,7 +118,6 @@ def train_and_save_model(output_path: Path = ARTIFACT_PATH) -> Dict[str, float]:
         reg_lambda=1.0,
         random_state=RANDOM_STATE,
         eval_metric="logloss",
-        use_label_encoder=False,
     )
     model.fit(X_resampled, y_resampled)
 
@@ -182,6 +182,27 @@ def _aggregate_shap_by_base_feature(
     return aggregated
 
 
+def _compute_shap_values_row(bundle: Dict[str, Any], transformed: Any) -> np.ndarray:
+    """Compute one-row SHAP contributions with a resilient fallback path.
+
+    Primary path: shap.TreeExplainer
+    Fallback path: XGBoost pred_contribs (SHAP-compatible contributions)
+    """
+    model = bundle["model"]
+
+    try:
+        explainer = shap.TreeExplainer(model)
+        shap_result = explainer.shap_values(transformed)
+        if isinstance(shap_result, list):
+            return np.asarray(shap_result[-1])[0]
+        return np.asarray(shap_result)[0]
+    except Exception:
+        dmatrix = xgb.DMatrix(transformed)
+        contribs = model.get_booster().predict(dmatrix, pred_contribs=True)
+        # Last column is bias term; exclude to align with transformed feature names.
+        return np.asarray(contribs)[0][:-1]
+
+
 def get_explanation(input_data: Dict[str, Any]) -> Dict[str, Any]:
     """Return PD and top-3 risk-increasing/decreasing SHAP reason codes.
 
@@ -203,14 +224,7 @@ def get_explanation(input_data: Dict[str, Any]) -> Dict[str, Any]:
 
     pd_score = float(bundle["model"].predict_proba(transformed)[0, 1])
 
-    explainer = shap.TreeExplainer(bundle["model"])
-    shap_result = explainer.shap_values(transformed)
-
-    # SHAP output for binary classifiers may be list-like or ndarray depending on version.
-    if isinstance(shap_result, list):
-        shap_values_row = np.asarray(shap_result[-1])[0]
-    else:
-        shap_values_row = np.asarray(shap_result)[0]
+    shap_values_row = _compute_shap_values_row(bundle=bundle, transformed=transformed)
 
     aggregated = _aggregate_shap_by_base_feature(
         shap_values_row=shap_values_row,

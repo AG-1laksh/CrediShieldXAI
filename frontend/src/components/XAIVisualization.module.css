@@ -1,9 +1,11 @@
 .card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 16px;
   padding: 1.25rem;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 16px 40px rgba(2, 6, 23, 0.35);
+  backdrop-filter: blur(12px);
+  color: #f8fafc;
 }
 
 .panels {
@@ -13,8 +15,8 @@
 }
 
 .panel {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 10px;
   padding: 0.75rem;
 }
@@ -36,7 +38,7 @@
   left: 50%;
   transform: translateX(-50%);
   font-weight: 700;
-  color: #0f172a;
+  color: #f8fafc;
 }
 
 .reasons {
@@ -52,5 +54,33 @@
 }
 
 .empty {
-  color: #64748b;
+  color: #94a3b8;
+}
+
+.skeletonGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.skeletonCard {
+  height: 230px;
+  border-radius: 12px;
+  background: linear-gradient(
+    90deg,
+    rgba(30, 41, 59, 0.7) 20%,
+    rgba(51, 65, 85, 0.85) 45%,
+    rgba(30, 41, 59, 0.7) 70%
+  );
+  background-size: 250% 100%;
+  animation: pulseShimmer 1.6s infinite;
+}
+
+@keyframes pulseShimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
 }

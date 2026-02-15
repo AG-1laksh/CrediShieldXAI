@@ -1,14 +1,15 @@
 .card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 14px;
   padding: 1.25rem;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 16px 30px rgba(2, 6, 23, 0.4);
+  color: #f8fafc;
 }
 
 .subtitle {
   margin-top: 0.3rem;
-  color: #64748b;
+  color: #94a3b8;
 }
 
 .grid {
@@ -18,8 +19,8 @@
 }
 
 .sliderField {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: rgba(15, 23, 42, 0.62);
+  border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 10px;
   padding: 0.65rem;
 }
@@ -33,10 +34,11 @@
 
 .sliderField input[type='range'] {
   width: 100%;
+  accent-color: #10b981;
 }
 
 .note {
   margin-top: 0.75rem;
-  color: #475569;
+  color: #cbd5e1;
   font-style: italic;
 }
