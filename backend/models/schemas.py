@@ -62,6 +62,9 @@ class AuditLogEntry(BaseModel):
 
 
 class AuditLogsResponse(BaseModel):
+    total: int
+    limit: int
+    offset: int
     count: int
     entries: List[AuditLogEntry]
 

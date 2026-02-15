@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { jsPDF } from 'jspdf';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import {
   checkHealth,
   fetchAuditLogs,
@@ -8,18 +7,20 @@ import {
   predictBatch,
   predictRisk,
 } from './api/client';
-import AdminPanel from './components/AdminPanel';
 import AssessmentForm from './components/AssessmentForm';
-import BatchScoringPanel from './components/BatchScoringPanel';
-import DecisionSupportPanel from './components/DecisionSupportPanel';
-import OnboardingTour from './components/OnboardingTour';
-import WhatIfSimulator from './components/WhatIfSimulator';
-import XAIVisualization from './components/XAIVisualization';
 import { computeConfidence, generateRecommendations, getFeatureLabel } from './constants/decisionSupport';
 import { DEFAULT_FORM_VALUES } from './constants/formOptions';
 import { TEXT } from './constants/i18n';
 import { getValidationHints } from './constants/validation';
 import styles from './App.module.css';
+
+const DecisionSupportPanel = lazy(() => import('./components/DecisionSupportPanel'));
+const WhatIfSimulator = lazy(() => import('./components/WhatIfSimulator'));
+const XAIVisualization = lazy(() => import('./components/XAIVisualization'));
+const BatchScoringPanel = lazy(() => import('./components/BatchScoringPanel'));
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
+const OnboardingTour = lazy(() => import('./components/OnboardingTour'));
+const AnalystAdminLogin = lazy(() => import('./components/AnalystAdminLogin'));
 
 function readSessionState(key, fallback) {
   try {
@@ -38,7 +39,22 @@ function confidenceText(score) {
   return `${Math.round(score * 100)}%`;
 }
 
-function App() {
+function decodeGoogleCredential(credential) {
+  if (!credential) return null;
+
+  try {
+    const payloadBase64 = credential.split('.')[1];
+    const normalized = payloadBase64.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
+    const json = atob(padded);
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+function App({ googleClientIdConfigured = false }) {
+  const AUDIT_PAGE_SIZE = 25;
   const [formData, setFormData] = useState(DEFAULT_FORM_VALUES);
   const [prediction, setPrediction] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -52,10 +68,21 @@ function App() {
   const [language, setLanguage] = useState(() => readSessionState('credishield-language', 'en'));
   const [tourOpen, setTourOpen] = useState(() => readSessionState('credishield-tour-open', true));
   const [role, setRole] = useState(() => readSessionState('credishield-role', 'end_user'));
+  const [authUser, setAuthUser] = useState(() => readSessionState('credishield-auth-user', null));
   const [modelInfo, setModelInfo] = useState(null);
   const [fairnessMetrics, setFairnessMetrics] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [auditOffset, setAuditOffset] = useState(0);
+  const [auditPurposeFilter, setAuditPurposeFilter] = useState('');
+  const [auditMeta, setAuditMeta] = useState({
+    total: 0,
+    limit: AUDIT_PAGE_SIZE,
+    offset: 0,
+    count: 0,
+  });
   const t = TEXT[language] ?? TEXT.en;
+  const isPrivilegedRole = role === 'analyst' || role === 'admin';
+  const isPrivilegedAuthenticated = !isPrivilegedRole || authUser?.role === role;
 
   const updateField = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -116,19 +143,42 @@ function App() {
   };
 
   const refreshAdminData = async () => {
-    if (role === 'end_user') return;
+    if (role === 'end_user' || !isPrivilegedAuthenticated) return;
     try {
       const [model, fairness, logs] = await Promise.all([
         fetchModelRegistry(),
         fetchFairnessMetrics(),
-        fetchAuditLogs(120),
+        fetchAuditLogs({
+          limit: AUDIT_PAGE_SIZE,
+          offset: auditOffset,
+          purpose: auditPurposeFilter,
+        }),
       ]);
       setModelInfo(model);
       setFairnessMetrics(fairness);
       setAuditLogs(logs.entries ?? []);
+      setAuditMeta({
+        total: logs.total ?? 0,
+        limit: logs.limit ?? AUDIT_PAGE_SIZE,
+        offset: logs.offset ?? auditOffset,
+        count: logs.count ?? (logs.entries?.length ?? 0),
+      });
     } catch (e) {
       console.error('Admin data refresh failed', e);
     }
+  };
+
+  const handlePurposeFilterChange = (value) => {
+    setAuditPurposeFilter(value);
+    setAuditOffset(0);
+  };
+
+  const handlePrevAuditPage = () => {
+    setAuditOffset((prev) => Math.max(0, prev - AUDIT_PAGE_SIZE));
+  };
+
+  const handleNextAuditPage = () => {
+    setAuditOffset((prev) => prev + AUDIT_PAGE_SIZE);
   };
 
   const handleBatchScoring = async (rows) => {
@@ -161,11 +211,38 @@ function App() {
     setSavedScenarios((prev) => [nextScenario, ...prev].slice(0, 12));
   };
 
-  const handleExportPdf = () => {
+  const handleGoogleSuccess = (credentialResponse) => {
+    const profile = decodeGoogleCredential(credentialResponse?.credential);
+    if (!profile?.email) {
+      setError(t.googleLoginFailed);
+      return;
+    }
+
+    setError('');
+    setAuthUser({
+      name: profile.name ?? profile.email,
+      email: profile.email,
+      picture: profile.picture ?? '',
+      role,
+      provider: 'google',
+      at: new Date().toISOString(),
+    });
+  };
+
+  const handleGoogleError = () => {
+    setError(t.googleLoginFailed);
+  };
+
+  const handleLogout = () => {
+    setAuthUser(null);
+  };
+
+  const handleExportPdf = async () => {
     if (!prediction) return;
 
     const confidence = computeConfidence(prediction, language);
     const recommendations = generateRecommendations(formData, prediction, language);
+    const { jsPDF } = await import('jspdf');
     const doc = new jsPDF();
     let y = 14;
 
@@ -235,6 +312,10 @@ function App() {
   }, [role]);
 
   useEffect(() => {
+    saveSessionState('credishield-auth-user', authUser);
+  }, [authUser]);
+
+  useEffect(() => {
     refreshHealth();
     const interval = setInterval(refreshHealth, 15000);
     return () => clearInterval(interval);
@@ -242,7 +323,7 @@ function App() {
 
   useEffect(() => {
     refreshAdminData();
-  }, [role]);
+  }, [role, auditOffset, auditPurposeFilter, isPrivilegedAuthenticated]);
 
   useEffect(() => {
     if (!simulationEnabled) {
@@ -275,11 +356,11 @@ function App() {
               </button>
             </div>
             <div className={styles.roleSwitch}>
-              <span>Role</span>
+              <span>{t.roleLabel}</span>
               <select value={role} onChange={(e) => setRole(e.target.value)}>
-                <option value="end_user">End User</option>
-                <option value="analyst">Analyst</option>
-                <option value="admin">Admin</option>
+                <option value="end_user">{t.roleEndUser}</option>
+                <option value="analyst">{t.roleAnalyst}</option>
+                <option value="admin">{t.roleAdmin}</option>
               </select>
             </div>
             <button className={styles.tourBtn} type="button" onClick={() => setTourOpen(true)}>
@@ -301,55 +382,100 @@ function App() {
         </div>
       )}
 
-      <div className={styles.layout}>
-        <div className={styles.mainColumn}>
-          <AssessmentForm
-            formData={formData}
-            updateField={updateField}
-            currentStep={currentStep}
-            setCurrentStep={setCurrentStep}
-            onAssess={handleAssessRisk}
-            loading={loading}
-            language={language}
-            t={t}
-            validationHints={validationHints}
-          />
+      <div className={`${styles.layout} ${!isPrivilegedAuthenticated ? styles.layoutCentered : ''}`}>
+        <div className={`${styles.mainColumn} ${!isPrivilegedAuthenticated ? styles.mainColumnCentered : ''}`}>
+          {!isPrivilegedAuthenticated ? (
+            <Suspense fallback={<div className={styles.lazyFallback}>{t.analyzing}</div>}>
+              <AnalystAdminLogin
+                role={role}
+                t={t}
+                googleClientIdConfigured={googleClientIdConfigured}
+                onGoogleSuccess={handleGoogleSuccess}
+                onGoogleError={handleGoogleError}
+                authUser={authUser}
+                onLogout={handleLogout}
+              />
+            </Suspense>
+          ) : (
+            <>
+              <AssessmentForm
+                formData={formData}
+                updateField={updateField}
+                currentStep={currentStep}
+                setCurrentStep={setCurrentStep}
+                onAssess={handleAssessRisk}
+                loading={loading}
+                language={language}
+                t={t}
+                validationHints={validationHints}
+              />
 
-          {simulationEnabled && (
-            <WhatIfSimulator
-              formData={formData}
-              onScenarioChange={updateField}
-              isEnabled={simulationEnabled}
-              loading={loading}
-              t={t}
-              language={language}
-            />
+              {simulationEnabled ? (
+                <Suspense fallback={<div className={styles.lazyFallback}>{t.analyzing}</div>}>
+                  <WhatIfSimulator
+                    formData={formData}
+                    onScenarioChange={updateField}
+                    isEnabled={simulationEnabled}
+                    loading={loading}
+                    t={t}
+                    language={language}
+                  />
+                </Suspense>
+              ) : null}
+
+              <Suspense fallback={<div className={styles.lazyFallback}>{t.analyzing}</div>}>
+                <DecisionSupportPanel
+                  prediction={prediction}
+                  confidence={confidence}
+                  recommendations={recommendations}
+                  scenarios={savedScenarios}
+                  baselineScenario={baselineScenario}
+                  history={history}
+                  onSaveScenario={handleSaveScenario}
+                  onExportPdf={handleExportPdf}
+                  t={t}
+                  language={language}
+                />
+              </Suspense>
+
+              <Suspense fallback={<div className={styles.lazyFallback}>{t.analyzing}</div>}>
+                <BatchScoringPanel role={role} onRunBatch={handleBatchScoring} loading={loading} t={t} />
+              </Suspense>
+
+              <Suspense fallback={<div className={styles.lazyFallback}>{t.analyzing}</div>}>
+                <AdminPanel
+                  role={role}
+                  t={t}
+                  modelInfo={modelInfo}
+                  fairness={fairnessMetrics}
+                  auditLogs={auditLogs}
+                  auditMeta={auditMeta}
+                  auditPurposeFilter={auditPurposeFilter}
+                  onPurposeFilterChange={handlePurposeFilterChange}
+                  onPrevAuditPage={handlePrevAuditPage}
+                  onNextAuditPage={handleNextAuditPage}
+                  canPrevAuditPage={auditOffset > 0}
+                  canNextAuditPage={auditMeta.offset + auditMeta.count < auditMeta.total}
+                />
+              </Suspense>
+            </>
           )}
-
-          <DecisionSupportPanel
-            prediction={prediction}
-            confidence={confidence}
-            recommendations={recommendations}
-            scenarios={savedScenarios}
-            baselineScenario={baselineScenario}
-            history={history}
-            onSaveScenario={handleSaveScenario}
-            onExportPdf={handleExportPdf}
-            t={t}
-            language={language}
-          />
-
-          <BatchScoringPanel role={role} onRunBatch={handleBatchScoring} loading={loading} />
-
-          <AdminPanel role={role} modelInfo={modelInfo} fairness={fairnessMetrics} auditLogs={auditLogs} />
         </div>
 
         <div className={styles.vizColumn}>
-           <XAIVisualization prediction={prediction} loading={loading} t={t} language={language} />
+          {isPrivilegedAuthenticated ? (
+            <Suspense fallback={<div className={styles.lazyFallback}>{t.analyzing}</div>}>
+              <XAIVisualization prediction={prediction} loading={loading} t={t} language={language} />
+            </Suspense>
+          ) : null}
         </div>
       </div>
 
-      {tourOpen ? <OnboardingTour t={t} onClose={() => setTourOpen(false)} /> : null}
+      {tourOpen && isPrivilegedAuthenticated ? (
+        <Suspense fallback={null}>
+          <OnboardingTour t={t} onClose={() => setTourOpen(false)} />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

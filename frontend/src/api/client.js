@@ -88,8 +88,17 @@ export async function predictBatch(items) {
   return response.json();
 }
 
-export async function fetchAuditLogs(limit = 100) {
-  const response = await fetch(`${API_BASE_URL}/audit-logs?limit=${limit}`);
+export async function fetchAuditLogs(options = {}) {
+  const limit = options.limit ?? 50;
+  const offset = options.offset ?? 0;
+  const purpose = options.purpose ?? '';
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
+  if (purpose) params.set('purpose', purpose);
+
+  const response = await fetch(`${API_BASE_URL}/audit-logs?${params.toString()}`);
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Audit logs request failed: ${errorText}`);

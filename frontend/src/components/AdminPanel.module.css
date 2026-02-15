@@ -57,6 +57,49 @@
   overflow: auto;
 }
 
+.auditControls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.auditControls input {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.4rem 0.55rem;
+  min-width: 220px;
+  font-size: 0.82rem;
+}
+
+.auditPager {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.auditPager button {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 0.28rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auditPager button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.auditPager span {
+  color: #475569;
+  font-size: 0.76rem;
+}
+
 .empty {
   margin: 0;
   color: #64748b;

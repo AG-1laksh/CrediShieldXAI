@@ -68,9 +68,13 @@ def predict_batch(payload: BatchPredictionRequest) -> BatchPredictionResponse:
 
 
 @router.get("/audit-logs", response_model=AuditLogsResponse)
-def audit_logs(limit: int = Query(default=100, ge=1, le=1000)) -> AuditLogsResponse:
-    logs = database_service.fetch_audit_logs(limit=limit)
-    return AuditLogsResponse(count=len(logs), entries=logs)
+def audit_logs(
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    purpose: str | None = Query(default=None),
+) -> AuditLogsResponse:
+    payload = database_service.fetch_audit_logs(limit=limit, offset=offset, purpose=purpose)
+    return AuditLogsResponse(**payload)
 
 
 @router.get("/model-registry", response_model=ModelRegistryResponse)

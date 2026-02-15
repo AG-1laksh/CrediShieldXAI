@@ -68,20 +68,38 @@ class DatabaseService:
             )
             conn.commit()
 
-    def fetch_audit_logs(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def fetch_audit_logs(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        purpose: str | None = None,
+    ) -> Dict[str, Any]:
+        where_clause = ""
+        params: List[Any] = []
+        if purpose:
+            where_clause = " WHERE json_extract(input_json, '$.purpose') = ?"
+            params.append(purpose)
+
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
+            total_row = conn.execute(
+                f"SELECT COUNT(*) AS c FROM predictions{where_clause}",
+                tuple(params),
+            ).fetchone()
+            total = int(total_row["c"]) if total_row else 0
+
             rows = conn.execute(
-                """
+                f"""
                 SELECT id, timestamp, input_json, pd_score, model_version
                 FROM predictions
+                {where_clause}
                 ORDER BY id DESC
-                LIMIT ?
+                LIMIT ? OFFSET ?
                 """,
-                (limit,),
+                tuple([*params, limit, offset]),
             ).fetchall()
 
-        return [
+        entries = [
             {
                 "id": int(row["id"]),
                 "timestamp": row["timestamp"],
@@ -91,6 +109,14 @@ class DatabaseService:
             }
             for row in rows
         ]
+
+        return {
+            "total": total,
+            "limit": int(limit),
+            "offset": int(offset),
+            "count": len(entries),
+            "entries": entries,
+        }
 
     def fetch_fairness_metrics(self) -> Dict[str, Any]:
         with self._connect() as conn:

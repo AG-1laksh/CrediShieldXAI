@@ -16,7 +16,7 @@ function parseCsv(text) {
   });
 }
 
-export default function BatchScoringPanel({ role, onRunBatch, loading }) {
+export default function BatchScoringPanel({ role, onRunBatch, loading, t }) {
   const [fileName, setFileName] = useState('');
   const [rows, setRows] = useState([]);
   const [result, setResult] = useState(null);
@@ -34,7 +34,7 @@ export default function BatchScoringPanel({ role, onRunBatch, loading }) {
     const parsed = parseCsv(content);
     setRows(parsed);
     if (!parsed.length) {
-      setError('CSV parsing failed or no rows found.');
+      setError(t.csvParseFailed);
     }
   };
 
@@ -45,14 +45,28 @@ export default function BatchScoringPanel({ role, onRunBatch, loading }) {
       const output = await onRunBatch(rows);
       setResult(output);
     } catch (e) {
-      setError(e.message || 'Batch scoring failed');
+      setError(e.message || t.batchScoringFailed);
     }
+  };
+
+  const handleDownload = () => {
+    if (!result?.results?.length) return;
+    const header = ['index', 'probability_of_default'];
+    const lines = result.results.map((row) => `${row.index},${row.probability_of_default}`);
+    const csv = [header.join(','), ...lines].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `batch_results_${Date.now()}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
     <section className={styles.card}>
-      <h2>Batch Scoring Upload</h2>
-      <p>Upload CSV with the same input columns as the form to score multiple applicants.</p>
+      <h2>{t.batchTitle}</h2>
+      <p>{t.batchSubtitle}</p>
 
       <label className={styles.fileInputWrap}>
         <input
@@ -63,25 +77,28 @@ export default function BatchScoringPanel({ role, onRunBatch, loading }) {
       </label>
 
       <div className={styles.metaRow}>
-        <span>{fileName || 'No file selected'}</span>
-        <span>{rows.length} rows</span>
+        <span>{fileName || t.noFileSelected}</span>
+        <span>{rows.length} {t.rowsSuffix}</span>
       </div>
 
       <button type="button" disabled={loading || rows.length === 0} className={styles.runBtn} onClick={handleRun}>
-        Run Batch Scoring
+        {t.runBatchScoring}
       </button>
 
       {error ? <p className={styles.error}>{error}</p> : null}
 
       {result ? (
         <div className={styles.resultBox}>
-          <strong>Processed: {result.count} rows</strong>
+          <strong>{t.processedRows}: {result.count} {t.rowsSuffix}</strong>
           <ul>
             {result.results.slice(0, 5).map((row) => (
-              <li key={row.index}>Row {row.index + 1}: {(row.probability_of_default * 100).toFixed(1)}% PD</li>
+              <li key={row.index}>{t.rowLabel} {row.index + 1}: {(row.probability_of_default * 100).toFixed(1)}% PD</li>
             ))}
           </ul>
-          {result.results.length > 5 ? <em>Showing first 5 rows…</em> : null}
+          {result.results.length > 5 ? <em>{t.showingFirstRows}</em> : null}
+          <button type="button" className={styles.downloadBtn} onClick={handleDownload}>
+            {t.downloadResultCsv}
+          </button>
         </div>
       ) : null}
     </section>
