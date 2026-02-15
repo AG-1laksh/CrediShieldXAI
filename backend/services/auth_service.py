@@ -25,9 +25,12 @@ class AuthService:
         self.allowed_admin_emails = {e.strip().lower() for e in admin_emails.split(",") if e.strip()}
         self.allowed_domains = {d.strip().lower() for d in domains.split(",") if d.strip()}
 
-    def _is_role_allowed(self, email: str, role: Literal["analyst", "admin"]) -> bool:
+    def _is_role_allowed(self, email: str, role: Literal["end_user", "analyst", "admin"]) -> bool:
         email_l = email.lower()
         domain = email_l.split("@")[-1] if "@" in email_l else ""
+
+        if role == "end_user":
+            return True
 
         if role == "admin":
             if email_l in self.allowed_admin_emails:
@@ -48,7 +51,7 @@ class AuthService:
     def verify_google_token_and_role(
         self,
         raw_id_token: str,
-        requested_role: Literal["analyst", "admin"],
+        requested_role: Literal["end_user", "analyst", "admin"],
     ) -> Dict[str, Any]:
         query = urlencode({"id_token": raw_id_token})
         with urlopen(f"https://oauth2.googleapis.com/tokeninfo?{query}", timeout=8) as response:

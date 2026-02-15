@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime, timezone
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -14,6 +15,7 @@ from backend.models.schemas import (
     AuthSessionResponse,
     AuthenticatedUser,
     AuditLogsResponse,
+    AuditExportResponse,
     BatchPredictionRequest,
     BatchPredictionResponse,
     BatchPredictionResult,
@@ -32,6 +34,9 @@ from backend.models.schemas import (
     MonitoringAlert,
     PredictionRequest,
     PredictionResponse,
+    ReportListResponse,
+    ReportResponse,
+    ReportShareResponse,
 )
 from backend.services.database_service import DatabaseService
 from backend.services.prediction_service import PredictionService
@@ -294,3 +299,70 @@ def governance_comparison(
         challenger_avg_pd=float(round(challenger_avg, 4)),
         recommendation=recommendation,
     )
+
+
+@router.post("/reports/from-case/{case_id}", response_model=ReportResponse)
+def create_report_from_case(
+    case_id: int,
+    title: str | None = Query(default=None),
+    user: AuthenticatedUser = Depends(require_roles("analyst", "admin")),
+) -> ReportResponse:
+    try:
+        report = database_service.create_report_for_case(
+            case_id=case_id,
+            created_by=user.email,
+            title=title or f"Case {case_id} Report",
+        )
+        return ReportResponse(report=report)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/reports", response_model=ReportListResponse)
+def list_reports(
+    case_id: int = Query(..., ge=1),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    _: AuthenticatedUser = Depends(require_roles("analyst", "admin")),
+) -> ReportListResponse:
+    payload = database_service.list_reports(case_id=case_id, limit=limit, offset=offset)
+    return ReportListResponse(**payload)
+
+
+@router.post("/reports/{report_id}/share", response_model=ReportShareResponse)
+def create_report_share_link(
+    report_id: int,
+    ttl_minutes: int = Query(default=60, ge=1, le=10080),
+    user: AuthenticatedUser = Depends(require_roles("analyst", "admin")),
+) -> ReportShareResponse:
+    try:
+        payload = database_service.create_report_share_link(report_id=report_id, created_by=user.email, ttl_minutes=ttl_minutes)
+        payload["share_url"] = f"http://127.0.0.1:8000/public/reports/{payload['token']}"
+        return ReportShareResponse(**payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/public/reports/{token}", response_model=ReportResponse)
+def read_shared_report(token: str) -> ReportResponse:
+    try:
+        report = database_service.resolve_report_share_token(token)
+        return ReportResponse(report=report)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/reports/audit-package", response_model=AuditExportResponse)
+def export_audit_package(
+    case_id: int = Query(..., ge=1),
+    _: AuthenticatedUser = Depends(require_roles("admin")),
+) -> AuditExportResponse:
+    try:
+        package = database_service.build_audit_export_package(case_id)
+        return AuditExportResponse(
+            case_id=case_id,
+            exported_at=datetime.now(timezone.utc).isoformat(),
+            package=package,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

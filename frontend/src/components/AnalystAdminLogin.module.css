@@ -70,3 +70,15 @@
   font-weight: 700;
   cursor: pointer;
 }
+
+.skipBtn {
+  margin-top: 0.9rem;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}

@@ -1,5 +1,5 @@
 import styles from './DecisionSupportPanel.module.css';
-import { summarizeTopFactors } from '../constants/decisionSupport';
+import { buildCounterfactual, buildStoryNarrative, rankImprovementActions, summarizeTopFactors } from '../constants/decisionSupport';
 
 function confidenceClass(band) {
   if (band === 'High') return styles.high;
@@ -9,6 +9,7 @@ function confidenceClass(band) {
 
 export default function DecisionSupportPanel({
   prediction,
+  formData = {},
   confidence,
   recommendations,
   scenarios,
@@ -39,6 +40,9 @@ export default function DecisionSupportPanel({
   if (!prediction) return null;
 
   const baselinePd = baselineScenario?.prediction?.probability_of_default ?? null;
+  const storyNarrative = buildStoryNarrative(formData, prediction, language);
+  const rankedActions = rankImprovementActions(formData, prediction, language);
+  const counterfactual = buildCounterfactual(formData, prediction, language);
 
   const getBandLabel = (band) => {
     if (band === 'High') return t.confidenceHigh ?? band;
@@ -74,6 +78,36 @@ export default function DecisionSupportPanel({
             <li key={tip}>{tip}</li>
           ))}
         </ul>
+      </div>
+
+      <div className={styles.block}>
+        <h3>{t.storyModeTitle ?? 'Why this decision?'}</h3>
+        <p className={styles.storyText}>{storyNarrative}</p>
+
+        <div className={styles.tableWrap}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>{t.rankLabel ?? 'Rank'}</th>
+                <th>{t.actionLabel ?? 'Action'}</th>
+                <th>{t.estimatedDropLabel ?? 'Estimated PD Drop'}</th>
+                <th>{t.afterActionPdLabel ?? 'Estimated PD After Action'}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rankedActions.map((row) => (
+                <tr key={row.rank}>
+                  <td>{row.rank}</td>
+                  <td>{row.action}</td>
+                  <td>-{(row.delta * 100).toFixed(1)}%</td>
+                  <td>{(row.estimatedPd * 100).toFixed(1)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {counterfactual ? <p className={styles.counterfactual}>{counterfactual.text}</p> : null}
       </div>
 
       <div className={styles.block}>

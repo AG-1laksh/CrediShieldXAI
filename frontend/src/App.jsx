@@ -21,6 +21,7 @@ const WhatIfSimulator = lazy(() => import('./components/WhatIfSimulator'));
 const XAIVisualization = lazy(() => import('./components/XAIVisualization'));
 const BatchScoringPanel = lazy(() => import('./components/BatchScoringPanel'));
 const AdminPanel = lazy(() => import('./components/AdminPanel'));
+const ReportCenter = lazy(() => import('./components/ReportCenter'));
 const OnboardingTour = lazy(() => import('./components/OnboardingTour'));
 const AnalystAdminLogin = lazy(() => import('./components/AnalystAdminLogin'));
 
@@ -58,6 +59,7 @@ function App({ googleClientIdConfigured = false }) {
   const [role, setRole] = useState(() => readSessionState('credishield-role', 'end_user'));
   const [authUser, setAuthUser] = useState(() => readSessionState('credishield-auth-user', null));
   const [authToken, setAuthToken] = useState(() => readSessionState('credishield-auth-token', ''));
+  const [userSkippedLogin, setUserSkippedLogin] = useState(() => readSessionState('credishield-user-skipped-login', false));
   const [modelInfo, setModelInfo] = useState(null);
   const [fairnessMetrics, setFairnessMetrics] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
@@ -71,7 +73,9 @@ function App({ googleClientIdConfigured = false }) {
   });
   const t = TEXT[language] ?? TEXT.en;
   const isPrivilegedRole = role === 'analyst' || role === 'admin';
-  const isPrivilegedAuthenticated = !isPrivilegedRole || authUser?.role === role;
+  const isRoleAuthenticated = role === 'end_user'
+    ? (Boolean(authUser) || userSkippedLogin)
+    : authUser?.role === role;
 
   const updateField = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -132,7 +136,7 @@ function App({ googleClientIdConfigured = false }) {
   };
 
   const refreshAdminData = async () => {
-    if (role === 'end_user' || !isPrivilegedAuthenticated) return;
+    if (role === 'end_user' || !isRoleAuthenticated) return;
     try {
       const [model, fairness, logs] = await Promise.all([
         fetchModelRegistry(),
@@ -210,6 +214,7 @@ function App({ googleClientIdConfigured = false }) {
     googleLogin(idToken, role)
       .then((session) => {
         setError('');
+        setUserSkippedLogin(false);
         setAuthToken(session.access_token);
         setAccessToken(session.access_token);
         setAuthUser({
@@ -228,9 +233,15 @@ function App({ googleClientIdConfigured = false }) {
   };
 
   const handleLogout = () => {
+    setUserSkippedLogin(false);
     setAuthToken('');
     setAccessToken('');
     setAuthUser(null);
+  };
+
+  const handleSkipLogin = () => {
+    setError('');
+    setUserSkippedLogin(true);
   };
 
   const handleExportPdf = async () => {
@@ -317,6 +328,10 @@ function App({ googleClientIdConfigured = false }) {
   }, [authToken]);
 
   useEffect(() => {
+    saveSessionState('credishield-user-skipped-login', userSkippedLogin);
+  }, [userSkippedLogin]);
+
+  useEffect(() => {
     refreshHealth();
     const interval = setInterval(refreshHealth, 15000);
     return () => clearInterval(interval);
@@ -324,7 +339,7 @@ function App({ googleClientIdConfigured = false }) {
 
   useEffect(() => {
     refreshAdminData();
-  }, [role, auditOffset, auditPurposeFilter, isPrivilegedAuthenticated]);
+  }, [role, auditOffset, auditPurposeFilter, isRoleAuthenticated]);
 
   useEffect(() => {
     if (!simulationEnabled) {
@@ -383,9 +398,9 @@ function App({ googleClientIdConfigured = false }) {
         </div>
       )}
 
-      <div className={`${styles.layout} ${!isPrivilegedAuthenticated ? styles.layoutCentered : ''}`}>
-        <div className={`${styles.mainColumn} ${!isPrivilegedAuthenticated ? styles.mainColumnCentered : ''}`}>
-          {!isPrivilegedAuthenticated ? (
+      <div className={`${styles.layout} ${!isRoleAuthenticated ? styles.layoutCentered : ''}`}>
+        <div className={`${styles.mainColumn} ${!isRoleAuthenticated ? styles.mainColumnCentered : ''}`}>
+          {!isRoleAuthenticated ? (
             <Suspense fallback={<div className={styles.lazyFallback}>{t.analyzing}</div>}>
               <AnalystAdminLogin
                 role={role}
@@ -395,6 +410,8 @@ function App({ googleClientIdConfigured = false }) {
                 onGoogleError={handleGoogleError}
                 authUser={authUser}
                 onLogout={handleLogout}
+                allowSkip={!isPrivilegedRole}
+                onSkipLogin={handleSkipLogin}
               />
             </Suspense>
           ) : (
@@ -427,6 +444,7 @@ function App({ googleClientIdConfigured = false }) {
               <Suspense fallback={<div className={styles.lazyFallback}>{t.analyzing}</div>}>
                 <DecisionSupportPanel
                   prediction={prediction}
+                  formData={formData}
                   confidence={confidence}
                   recommendations={recommendations}
                   scenarios={savedScenarios}
@@ -441,6 +459,15 @@ function App({ googleClientIdConfigured = false }) {
 
               <Suspense fallback={<div className={styles.lazyFallback}>{t.analyzing}</div>}>
                 <BatchScoringPanel role={role} onRunBatch={handleBatchScoring} loading={loading} t={t} />
+              </Suspense>
+
+              <Suspense fallback={<div className={styles.lazyFallback}>{t.analyzing}</div>}>
+                <ReportCenter
+                  role={role}
+                  t={t}
+                  formData={formData}
+                  prediction={prediction}
+                />
               </Suspense>
 
               <Suspense fallback={<div className={styles.lazyFallback}>{t.analyzing}</div>}>
@@ -464,7 +491,7 @@ function App({ googleClientIdConfigured = false }) {
         </div>
 
         <div className={styles.vizColumn}>
-          {isPrivilegedAuthenticated ? (
+          {isRoleAuthenticated ? (
             <Suspense fallback={<div className={styles.lazyFallback}>{t.analyzing}</div>}>
               <XAIVisualization prediction={prediction} loading={loading} t={t} language={language} />
             </Suspense>
@@ -472,7 +499,7 @@ function App({ googleClientIdConfigured = false }) {
         </div>
       </div>
 
-      {tourOpen && isPrivilegedAuthenticated ? (
+      {tourOpen && isRoleAuthenticated ? (
         <Suspense fallback={null}>
           <OnboardingTour t={t} onClose={() => setTourOpen(false)} />
         </Suspense>

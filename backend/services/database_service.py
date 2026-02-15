@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import secrets
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -49,6 +50,35 @@ class DatabaseService:
                     prediction_json TEXT,
                     analyst_notes TEXT,
                     admin_override_reason TEXT
+                )
+                """
+            )
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS reports (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    case_id INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    created_by TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    report_json TEXT NOT NULL,
+                    FOREIGN KEY(case_id) REFERENCES cases(id)
+                )
+                """
+            )
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS report_share_links (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    report_id INTEGER NOT NULL,
+                    token TEXT NOT NULL UNIQUE,
+                    created_at TEXT NOT NULL,
+                    created_by TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    revoked INTEGER NOT NULL DEFAULT 0,
+                    FOREIGN KEY(report_id) REFERENCES reports(id)
                 )
                 """
             )
@@ -356,4 +386,150 @@ class DatabaseService:
             "prediction_payload": json.loads(row["prediction_json"]) if row["prediction_json"] else None,
             "analyst_notes": row["analyst_notes"],
             "admin_override_reason": row["admin_override_reason"],
+        }
+
+    def create_report_for_case(self, case_id: int, created_by: str, title: str) -> Dict[str, Any]:
+        case = self.get_case(case_id)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        report_payload = {
+            "case": case,
+            "summary": {
+                "status": case["status"],
+                "assigned_to": case.get("assigned_to"),
+                "analyst_notes": case.get("analyst_notes"),
+                "admin_override_reason": case.get("admin_override_reason"),
+            },
+        }
+
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO reports (case_id, created_at, created_by, title, report_json)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (case_id, now_iso, created_by, title, json.dumps(report_payload)),
+            )
+            conn.commit()
+            report_id = cur.lastrowid
+
+        return self.get_report(report_id)
+
+    def get_report(self, report_id: int) -> Dict[str, Any]:
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
+
+        if row is None:
+            raise ValueError(f"Report {report_id} not found")
+
+        return {
+            "id": int(row["id"]),
+            "case_id": int(row["case_id"]),
+            "created_at": row["created_at"],
+            "created_by": row["created_by"],
+            "title": row["title"],
+            "report_payload": json.loads(row["report_json"]),
+        }
+
+    def list_reports(self, case_id: int, limit: int = 50, offset: int = 0) -> Dict[str, Any]:
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            total_row = conn.execute("SELECT COUNT(*) AS c FROM reports WHERE case_id = ?", (case_id,)).fetchone()
+            total = int(total_row["c"]) if total_row else 0
+            rows = conn.execute(
+                """
+                SELECT * FROM reports
+                WHERE case_id = ?
+                ORDER BY id DESC
+                LIMIT ? OFFSET ?
+                """,
+                (case_id, limit, offset),
+            ).fetchall()
+
+        entries = [
+            {
+                "id": int(row["id"]),
+                "case_id": int(row["case_id"]),
+                "created_at": row["created_at"],
+                "created_by": row["created_by"],
+                "title": row["title"],
+                "report_payload": json.loads(row["report_json"]),
+            }
+            for row in rows
+        ]
+        return {
+            "total": total,
+            "limit": int(limit),
+            "offset": int(offset),
+            "count": len(entries),
+            "entries": entries,
+        }
+
+    def create_report_share_link(self, report_id: int, created_by: str, ttl_minutes: int = 60) -> Dict[str, Any]:
+        self.get_report(report_id)
+        now = datetime.now(timezone.utc)
+        expires_at = now.timestamp() + (ttl_minutes * 60)
+        expires_iso = datetime.fromtimestamp(expires_at, tz=timezone.utc).isoformat()
+        token = secrets.token_urlsafe(24)
+
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO report_share_links (report_id, token, created_at, created_by, expires_at, revoked)
+                VALUES (?, ?, ?, ?, ?, 0)
+                """,
+                (report_id, token, now.isoformat(), created_by, expires_iso),
+            )
+            conn.commit()
+
+        return {
+            "report_id": report_id,
+            "token": token,
+            "expires_at": expires_iso,
+        }
+
+    def resolve_report_share_token(self, token: str) -> Dict[str, Any]:
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                SELECT report_id, expires_at, revoked
+                FROM report_share_links
+                WHERE token = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (token,),
+            ).fetchone()
+
+        if row is None:
+            raise ValueError("Share link not found")
+        if int(row["revoked"]) == 1:
+            raise ValueError("Share link is revoked")
+
+        expires_at = datetime.fromisoformat(row["expires_at"])
+        if expires_at < datetime.now(timezone.utc):
+            raise ValueError("Share link has expired")
+
+        return self.get_report(int(row["report_id"]))
+
+    def build_audit_export_package(self, case_id: int) -> Dict[str, Any]:
+        case = self.get_case(case_id)
+        reports = self.list_reports(case_id=case_id, limit=200, offset=0)
+        audit_logs = self.fetch_audit_logs(limit=500, offset=0)
+
+        case_purpose = str(case.get("applicant_payload", {}).get("purpose", ""))
+        scoped_logs = [
+            entry for entry in (audit_logs.get("entries") or [])
+            if str(entry.get("input_payload", {}).get("purpose", "")) == case_purpose
+        ]
+
+        return {
+            "case": case,
+            "reports": reports.get("entries", []),
+            "audit_logs": scoped_logs,
+            "controls": {
+                "pii_masking": "not_applied_in_export_v1",
+                "retention_policy": "configure_in_next_phase",
+            },
         }

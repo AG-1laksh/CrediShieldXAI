@@ -9,12 +9,22 @@ export default function AnalystAdminLogin({
   onGoogleError,
   authUser,
   onLogout,
+  allowSkip = false,
+  onSkipLogin,
 }) {
+  const roleLabel = role === 'admin' ? t.roleAdmin : role === 'analyst' ? t.roleAnalyst : t.roleEndUser;
+  const title = role === 'end_user'
+    ? (t.userLoginTitle ?? 'User Login')
+    : t.analystAdminLoginTitle;
+  const subtitle = role === 'end_user'
+    ? (t.userLoginSubtitle ?? 'Sign in to personalize your experience, or continue as guest.')
+    : t.analystAdminLoginSubtitle;
+
   return (
     <section className={styles.card}>
-      <h2>{t.analystAdminLoginTitle}</h2>
+      <h2>{title}</h2>
       <p>
-        {t.analystAdminLoginSubtitle} <strong>{role === 'admin' ? t.roleAdmin : t.roleAnalyst}</strong>
+        {subtitle} <strong>{roleLabel}</strong>
       </p>
 
       {authUser ? (
@@ -44,6 +54,12 @@ export default function AnalystAdminLogin({
           />
         </div>
       )}
+
+      {allowSkip && !authUser ? (
+        <button type="button" className={styles.skipBtn} onClick={onSkipLogin}>
+          {t.skipLogin ?? 'Skip Login'}
+        </button>
+      ) : null}
     </section>
   );
 }

@@ -108,14 +108,14 @@ class BatchPredictionResponse(BaseModel):
 
 class GoogleLoginRequest(BaseModel):
     id_token: str
-    requested_role: Literal["analyst", "admin"]
+    requested_role: Literal["end_user", "analyst", "admin"]
 
 
 class AuthenticatedUser(BaseModel):
     email: str
     name: str
     picture: str | None = None
-    role: Literal["analyst", "admin"]
+    role: Literal["end_user", "analyst", "admin"]
     tenant_id: str = "default"
 
 
@@ -201,3 +201,37 @@ class GovernanceComparisonResponse(BaseModel):
     champion_avg_pd: float
     challenger_avg_pd: float
     recommendation: str
+
+
+class ReportRecord(BaseModel):
+    id: int
+    case_id: int
+    created_at: datetime
+    created_by: str
+    title: str
+    report_payload: dict
+
+
+class ReportResponse(BaseModel):
+    report: ReportRecord
+
+
+class ReportListResponse(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    count: int
+    entries: List[ReportRecord]
+
+
+class ReportShareResponse(BaseModel):
+    report_id: int
+    token: str
+    expires_at: datetime
+    share_url: str
+
+
+class AuditExportResponse(BaseModel):
+    case_id: int
+    exported_at: datetime
+    package: dict

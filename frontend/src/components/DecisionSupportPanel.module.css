@@ -152,3 +152,21 @@
   color: var(--text-secondary);
   font-size: 0.9rem;
 }
+
+.storyText {
+  margin: 0 0 0.8rem;
+  color: var(--text-primary);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.counterfactual {
+  margin: 0.75rem 0 0;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 10px;
+  padding: 0.65rem 0.8rem;
+  font-size: 0.86rem;
+  font-weight: 700;
+}

@@ -238,3 +238,68 @@ export async function fetchGovernanceComparison(challengerVersion = '1.1.0') {
   }
   return response.json();
 }
+
+export async function createReportFromCase(caseId, title = '') {
+  const params = new URLSearchParams();
+  if (title) params.set('title', title);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+
+  const response = await fetch(`${API_BASE_URL}/reports/from-case/${caseId}${suffix}`, {
+    method: 'POST',
+    headers: withAuthHeaders(),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Create report failed: ${errorText}`);
+  }
+  return response.json();
+}
+
+export async function listReports(caseId, options = {}) {
+  const params = new URLSearchParams({
+    case_id: String(caseId),
+    limit: String(options.limit ?? 50),
+    offset: String(options.offset ?? 0),
+  });
+
+  const response = await fetch(`${API_BASE_URL}/reports?${params.toString()}`, {
+    headers: withAuthHeaders(),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`List reports failed: ${errorText}`);
+  }
+  return response.json();
+}
+
+export async function createReportShareLink(reportId, ttlMinutes = 60) {
+  const response = await fetch(`${API_BASE_URL}/reports/${reportId}/share?ttl_minutes=${encodeURIComponent(ttlMinutes)}`, {
+    method: 'POST',
+    headers: withAuthHeaders(),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Create share link failed: ${errorText}`);
+  }
+  return response.json();
+}
+
+export async function fetchAuditPackage(caseId) {
+  const response = await fetch(`${API_BASE_URL}/reports/audit-package?case_id=${encodeURIComponent(caseId)}`, {
+    headers: withAuthHeaders(),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Audit package export failed: ${errorText}`);
+  }
+  return response.json();
+}
+
+export async function fetchPublicReport(token) {
+  const response = await fetch(`${API_BASE_URL}/public/reports/${encodeURIComponent(token)}`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Public report fetch failed: ${errorText}`);
+  }
+  return response.json();
+}
