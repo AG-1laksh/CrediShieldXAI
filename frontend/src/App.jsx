@@ -4,8 +4,10 @@ import {
   fetchAuditLogs,
   fetchFairnessMetrics,
   fetchModelRegistry,
+  googleLogin,
   predictBatch,
   predictRisk,
+  setAccessToken,
 } from './api/client';
 import AssessmentForm from './components/AssessmentForm';
 import { computeConfidence, generateRecommendations, getFeatureLabel } from './constants/decisionSupport';
@@ -39,20 +41,6 @@ function confidenceText(score) {
   return `${Math.round(score * 100)}%`;
 }
 
-function decodeGoogleCredential(credential) {
-  if (!credential) return null;
-
-  try {
-    const payloadBase64 = credential.split('.')[1];
-    const normalized = payloadBase64.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
-    const json = atob(padded);
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
-
 function App({ googleClientIdConfigured = false }) {
   const AUDIT_PAGE_SIZE = 25;
   const [formData, setFormData] = useState(DEFAULT_FORM_VALUES);
@@ -69,6 +57,7 @@ function App({ googleClientIdConfigured = false }) {
   const [tourOpen, setTourOpen] = useState(() => readSessionState('credishield-tour-open', true));
   const [role, setRole] = useState(() => readSessionState('credishield-role', 'end_user'));
   const [authUser, setAuthUser] = useState(() => readSessionState('credishield-auth-user', null));
+  const [authToken, setAuthToken] = useState(() => readSessionState('credishield-auth-token', ''));
   const [modelInfo, setModelInfo] = useState(null);
   const [fairnessMetrics, setFairnessMetrics] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
@@ -212,21 +201,26 @@ function App({ googleClientIdConfigured = false }) {
   };
 
   const handleGoogleSuccess = (credentialResponse) => {
-    const profile = decodeGoogleCredential(credentialResponse?.credential);
-    if (!profile?.email) {
+    const idToken = credentialResponse?.credential;
+    if (!idToken) {
       setError(t.googleLoginFailed);
       return;
     }
 
-    setError('');
-    setAuthUser({
-      name: profile.name ?? profile.email,
-      email: profile.email,
-      picture: profile.picture ?? '',
-      role,
-      provider: 'google',
-      at: new Date().toISOString(),
-    });
+    googleLogin(idToken, role)
+      .then((session) => {
+        setError('');
+        setAuthToken(session.access_token);
+        setAccessToken(session.access_token);
+        setAuthUser({
+          ...session.user,
+          provider: 'google',
+          at: new Date().toISOString(),
+        });
+      })
+      .catch(() => {
+        setError(t.googleLoginFailed);
+      });
   };
 
   const handleGoogleError = () => {
@@ -234,6 +228,8 @@ function App({ googleClientIdConfigured = false }) {
   };
 
   const handleLogout = () => {
+    setAuthToken('');
+    setAccessToken('');
     setAuthUser(null);
   };
 
@@ -314,6 +310,11 @@ function App({ googleClientIdConfigured = false }) {
   useEffect(() => {
     saveSessionState('credishield-auth-user', authUser);
   }, [authUser]);
+
+  useEffect(() => {
+    saveSessionState('credishield-auth-token', authToken);
+    setAccessToken(authToken);
+  }, [authToken]);
 
   useEffect(() => {
     refreshHealth();

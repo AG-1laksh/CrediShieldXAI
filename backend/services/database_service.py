@@ -35,6 +35,23 @@ class DatabaseService:
             columns = {row[1] for row in conn.execute("PRAGMA table_info(predictions)").fetchall()}
             if "model_version" not in columns:
                 conn.execute("ALTER TABLE predictions ADD COLUMN model_version TEXT NOT NULL DEFAULT '1.0.0'")
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS cases (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    assigned_to TEXT,
+                    created_by TEXT NOT NULL,
+                    applicant_json TEXT NOT NULL,
+                    prediction_json TEXT,
+                    analyst_notes TEXT,
+                    admin_override_reason TEXT
+                )
+                """
+            )
             conn.commit()
 
     def log_prediction(
@@ -202,4 +219,141 @@ class DatabaseService:
             "total_predictions": int(total),
             "last_prediction_at": last_prediction_at,
             "trends": trends,
+        }
+
+    def create_case(
+        self,
+        created_by: str,
+        applicant_payload: Dict[str, Any],
+        prediction_payload: Dict[str, Any] | None,
+        assigned_to: str | None = None,
+        analyst_notes: str | None = None,
+    ) -> Dict[str, Any]:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO cases (
+                    created_at,
+                    updated_at,
+                    status,
+                    assigned_to,
+                    created_by,
+                    applicant_json,
+                    prediction_json,
+                    analyst_notes,
+                    admin_override_reason
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    now_iso,
+                    now_iso,
+                    "new",
+                    assigned_to,
+                    created_by,
+                    json.dumps(applicant_payload),
+                    json.dumps(prediction_payload) if prediction_payload is not None else None,
+                    analyst_notes,
+                    None,
+                ),
+            )
+            conn.commit()
+            case_id = cur.lastrowid
+
+        return self.get_case(case_id)
+
+    def list_cases(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        status_filter: str | None = None,
+        assigned_to: str | None = None,
+    ) -> Dict[str, Any]:
+        where_parts: List[str] = []
+        params: List[Any] = []
+
+        if status_filter:
+            where_parts.append("status = ?")
+            params.append(status_filter)
+        if assigned_to:
+            where_parts.append("assigned_to = ?")
+            params.append(assigned_to)
+
+        where_clause = f" WHERE {' AND '.join(where_parts)}" if where_parts else ""
+
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            total_row = conn.execute(
+                f"SELECT COUNT(*) AS c FROM cases{where_clause}",
+                tuple(params),
+            ).fetchone()
+            total = int(total_row["c"]) if total_row else 0
+
+            rows = conn.execute(
+                f"""
+                SELECT *
+                FROM cases
+                {where_clause}
+                ORDER BY id DESC
+                LIMIT ? OFFSET ?
+                """,
+                tuple([*params, limit, offset]),
+            ).fetchall()
+
+        entries = [self._row_to_case(r) for r in rows]
+        return {
+            "total": total,
+            "limit": int(limit),
+            "offset": int(offset),
+            "count": len(entries),
+            "entries": entries,
+        }
+
+    def get_case(self, case_id: int) -> Dict[str, Any]:
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
+
+        if row is None:
+            raise ValueError(f"Case {case_id} not found")
+        return self._row_to_case(row)
+
+    def update_case(self, case_id: int, updates: Dict[str, Any]) -> Dict[str, Any]:
+        allowed = {"status", "assigned_to", "analyst_notes", "admin_override_reason"}
+        set_parts: List[str] = []
+        params: List[Any] = []
+
+        for key, value in updates.items():
+            if key in allowed and value is not None:
+                set_parts.append(f"{key} = ?")
+                params.append(value)
+
+        set_parts.append("updated_at = ?")
+        params.append(datetime.now(timezone.utc).isoformat())
+        params.append(case_id)
+
+        if len(set_parts) == 1:
+            return self.get_case(case_id)
+
+        with self._connect() as conn:
+            conn.execute(
+                f"UPDATE cases SET {', '.join(set_parts)} WHERE id = ?",
+                tuple(params),
+            )
+            conn.commit()
+
+        return self.get_case(case_id)
+
+    def _row_to_case(self, row: sqlite3.Row) -> Dict[str, Any]:
+        return {
+            "id": int(row["id"]),
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "status": row["status"],
+            "assigned_to": row["assigned_to"],
+            "created_by": row["created_by"],
+            "applicant_payload": json.loads(row["applicant_json"]),
+            "prediction_payload": json.loads(row["prediction_json"]) if row["prediction_json"] else None,
+            "analyst_notes": row["analyst_notes"],
+            "admin_override_reason": row["admin_override_reason"],
         }

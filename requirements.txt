@@ -8,3 +8,5 @@ imbalanced-learn>=0.13.0
 xgboost>=2.1.0,<3.0.0
 shap>=0.46.0
 joblib>=1.4.0
+PyJWT>=2.9.0
+google-auth>=2.36.0

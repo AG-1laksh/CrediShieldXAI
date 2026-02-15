@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List
+from typing import List, Literal
 
 from pydantic import BaseModel, Field
 
@@ -104,3 +104,100 @@ class BatchPredictionResult(BaseModel):
 class BatchPredictionResponse(BaseModel):
     count: int
     results: List[BatchPredictionResult]
+
+
+class GoogleLoginRequest(BaseModel):
+    id_token: str
+    requested_role: Literal["analyst", "admin"]
+
+
+class AuthenticatedUser(BaseModel):
+    email: str
+    name: str
+    picture: str | None = None
+    role: Literal["analyst", "admin"]
+    tenant_id: str = "default"
+
+
+class AuthSessionResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in_seconds: int
+    user: AuthenticatedUser
+
+
+class CaseRecord(BaseModel):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    status: Literal["new", "under_review", "approved", "rejected"]
+    assigned_to: str | None = None
+    created_by: str
+    applicant_payload: dict
+    prediction_payload: dict | None = None
+    analyst_notes: str | None = None
+    admin_override_reason: str | None = None
+
+
+class CaseCreateRequest(BaseModel):
+    applicant_payload: PredictionRequest
+    auto_predict: bool = True
+    assigned_to: str | None = None
+    analyst_notes: str | None = None
+
+
+class CaseUpdateRequest(BaseModel):
+    status: Literal["new", "under_review", "approved", "rejected"] | None = None
+    assigned_to: str | None = None
+    analyst_notes: str | None = None
+    admin_override_reason: str | None = None
+
+
+class CaseListResponse(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    count: int
+    entries: List[CaseRecord]
+
+
+class CaseResponse(BaseModel):
+    case: CaseRecord
+
+
+class DocumentAnalyzeRequest(BaseModel):
+    doc_type: Literal["bank_statement", "salary_slip", "kyc"]
+    extracted_text: str
+    declared_fields: dict = Field(default_factory=dict)
+
+
+class DocumentMismatch(BaseModel):
+    field: str
+    declared_value: str
+    extracted_value: str
+
+
+class DocumentAnalyzeResponse(BaseModel):
+    doc_type: str
+    confidence: float
+    extracted_fields: dict
+    mismatches: List[DocumentMismatch]
+
+
+class MonitoringAlert(BaseModel):
+    alert_type: str
+    severity: Literal["low", "medium", "high"]
+    message: str
+
+
+class MonitoringResponse(BaseModel):
+    alerts: List[MonitoringAlert]
+    prediction_distribution: dict
+
+
+class GovernanceComparisonResponse(BaseModel):
+    champion_model_version: str
+    challenger_model_version: str
+    champion_avg_pd: float
+    challenger_avg_pd: float
+    recommendation: str

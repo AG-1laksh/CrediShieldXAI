@@ -1,6 +1,19 @@
 const API_BASE_URL = 'http://127.0.0.1:8000';
 
 const RETRY_DELAY_MS = 600;
+let ACCESS_TOKEN = '';
+
+export function setAccessToken(token) {
+  ACCESS_TOKEN = token ?? '';
+}
+
+function withAuthHeaders(headers = {}) {
+  if (!ACCESS_TOKEN) return headers;
+  return {
+    ...headers,
+    Authorization: `Bearer ${ACCESS_TOKEN}`,
+  };
+}
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -76,7 +89,7 @@ export async function fetchAnalytics() {
 export async function predictBatch(items) {
   const response = await fetch(`${API_BASE_URL}/predict/batch`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: withAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ items }),
   });
 
@@ -98,7 +111,9 @@ export async function fetchAuditLogs(options = {}) {
   });
   if (purpose) params.set('purpose', purpose);
 
-  const response = await fetch(`${API_BASE_URL}/audit-logs?${params.toString()}`);
+  const response = await fetch(`${API_BASE_URL}/audit-logs?${params.toString()}`, {
+    headers: withAuthHeaders(),
+  });
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Audit logs request failed: ${errorText}`);
@@ -107,7 +122,9 @@ export async function fetchAuditLogs(options = {}) {
 }
 
 export async function fetchModelRegistry() {
-  const response = await fetch(`${API_BASE_URL}/model-registry`);
+  const response = await fetch(`${API_BASE_URL}/model-registry`, {
+    headers: withAuthHeaders(),
+  });
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Model registry request failed: ${errorText}`);
@@ -116,10 +133,108 @@ export async function fetchModelRegistry() {
 }
 
 export async function fetchFairnessMetrics() {
-  const response = await fetch(`${API_BASE_URL}/fairness`);
+  const response = await fetch(`${API_BASE_URL}/fairness`, {
+    headers: withAuthHeaders(),
+  });
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Fairness metrics request failed: ${errorText}`);
+  }
+  return response.json();
+}
+
+export async function googleLogin(idToken, requestedRole) {
+  const response = await fetch(`${API_BASE_URL}/auth/google-login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id_token: idToken, requested_role: requestedRole }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Google login failed: ${errorText}`);
+  }
+
+  return response.json();
+}
+
+export async function createCase(payload) {
+  const response = await fetch(`${API_BASE_URL}/cases`, {
+    method: 'POST',
+    headers: withAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Create case failed: ${errorText}`);
+  }
+
+  return response.json();
+}
+
+export async function listCases(options = {}) {
+  const params = new URLSearchParams({
+    limit: String(options.limit ?? 50),
+    offset: String(options.offset ?? 0),
+  });
+  if (options.status) params.set('status', options.status);
+  if (options.assigned_to) params.set('assigned_to', options.assigned_to);
+
+  const response = await fetch(`${API_BASE_URL}/cases?${params.toString()}`, {
+    headers: withAuthHeaders(),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`List cases failed: ${errorText}`);
+  }
+  return response.json();
+}
+
+export async function updateCase(caseId, payload) {
+  const response = await fetch(`${API_BASE_URL}/cases/${caseId}`, {
+    method: 'PATCH',
+    headers: withAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Update case failed: ${errorText}`);
+  }
+  return response.json();
+}
+
+export async function analyzeDocument(payload) {
+  const response = await fetch(`${API_BASE_URL}/documents/analyze`, {
+    method: 'POST',
+    headers: withAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Document analyze failed: ${errorText}`);
+  }
+  return response.json();
+}
+
+export async function fetchMonitoring() {
+  const response = await fetch(`${API_BASE_URL}/monitoring`, {
+    headers: withAuthHeaders(),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Monitoring request failed: ${errorText}`);
+  }
+  return response.json();
+}
+
+export async function fetchGovernanceComparison(challengerVersion = '1.1.0') {
+  const response = await fetch(`${API_BASE_URL}/governance/comparison?challenger_version=${encodeURIComponent(challengerVersion)}`, {
+    headers: withAuthHeaders(),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Governance comparison failed: ${errorText}`);
   }
   return response.json();
 }
