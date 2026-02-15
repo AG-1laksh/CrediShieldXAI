@@ -18,9 +18,33 @@
 .header h2 {
   font-size: 1.5rem;
   color: var(--primary-dark);
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
   letter-spacing: -0.01em;
   font-weight: 700;
+}
+
+.explainBox {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid var(--primary-blue);
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.explainBox p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.explainBox p + p {
+  margin-top: 0.45rem;
+}
+
+.explainBox strong {
+  color: var(--text-primary);
 }
 
 .panels {
@@ -125,5 +149,61 @@
   color: var(--text-primary);
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   font-weight: 500;
+  gap: 0.75rem;
+}
+
+.reasonFeature {
+  display: block;
+  font-weight: 700;
+}
+
+.reasonMeaning {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-top: 0.2rem;
+}
+
+.termGlossary {
+  margin-top: 1.75rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.termGlossary h4 {
+  margin: 0 0 0.9rem;
+  color: var(--primary-dark);
+  font-size: 1rem;
+}
+
+.termGlossary ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.8rem;
+}
+
+.termGlossary li {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.7rem 0.8rem;
+}
+
+.termGlossary li strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  margin-bottom: 0.3rem;
+}
+
+.termGlossary li span {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.35;
 }

@@ -24,6 +24,57 @@ const COLORS = {
   tooltipText: '#1e293b'
 };
 
+const FEATURE_LABELS = {
+  checking_status: 'Money in Checking Account',
+  savings_status: 'Money in Savings',
+  duration: 'Repayment Time',
+  num__duration: 'Repayment Time',
+  credit_amount: 'Loan Amount',
+  num__credit_amount: 'Loan Amount',
+  installment_commitment: 'Monthly Payment Burden',
+  num__installment_commitment: 'Monthly Payment Burden',
+  purpose: 'Why You Need the Loan',
+};
+
+const FEATURE_MEANINGS = {
+  checking_status: 'This shows the balance range in your checking account.',
+  savings_status: 'This shows the balance range in your savings account.',
+  duration: 'How many months you will take to repay the loan.',
+  num__duration: 'How many months you will take to repay the loan.',
+  credit_amount: 'The total money you want to borrow.',
+  num__credit_amount: 'The total money you want to borrow.',
+  installment_commitment: 'How heavy your monthly loan payments are (from low to high).',
+  num__installment_commitment: 'How heavy your monthly loan payments are (from low to high).',
+  purpose: 'The reason for taking the loan (car, business, home items, etc.).',
+};
+
+function getFeatureLabel(feature) {
+  if (FEATURE_LABELS[feature]) return FEATURE_LABELS[feature];
+  const normalized = feature
+    .replace('num__', '')
+    .replaceAll('_', ' ')
+    .trim();
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function getFeatureMeaning(feature) {
+  return FEATURE_MEANINGS[feature] ?? 'This is one of the factors used by the AI to estimate loan risk.';
+}
+
+function ExplainabilityIntro() {
+  return (
+    <div className={styles.explainBox}>
+      <p>
+        <strong>XAI Visualization:</strong> This section explains <em>why</em> the AI gave your risk result, not just the final score.
+      </p>
+      <p>
+        <strong>SHAP:</strong> SHAP is a method that shows how each input (like loan amount or repayment time)
+        pushes your risk score up or down.
+      </p>
+    </div>
+  );
+}
+
 function formatPct(value) {
   return `${(value * 100).toFixed(1)}%`;
 }
@@ -37,6 +88,8 @@ function buildWaterfallData(prediction) {
 
   return items.map((item) => ({
     feature: item.feature,
+    featureLabel: getFeatureLabel(item.feature),
+    featureMeaning: getFeatureMeaning(item.feature),
     impact: item.impact,
     impactAbs: Math.abs(item.impact),
     color: item.direction === 'up' ? COLORS.highRisk : COLORS.lowRisk,
@@ -52,6 +105,7 @@ export default function XAIVisualization({ prediction, loading = false }) {
         <div className={styles.header}>
            <h2>XAI Visualization</h2>
         </div>
+        <ExplainabilityIntro />
         <div className={styles.skeletonGrid}>
           <div className={styles.skeletonCard} />
           <div className={styles.skeletonCard} />
@@ -65,6 +119,7 @@ export default function XAIVisualization({ prediction, loading = false }) {
       <section className={styles.card}>
         <div className={styles.header}>
             <h2>XAI Visualization</h2>
+            <ExplainabilityIntro />
             <p className={styles.empty}>Run an assessment to view risk gauge and SHAP waterfall.</p>
         </div>
       </section>
@@ -76,12 +131,17 @@ export default function XAIVisualization({ prediction, loading = false }) {
   const riskColor = isHighRisk ? COLORS.highRisk : COLORS.lowRisk;
   const gaugeData = [{ name: 'PD', value: pd * 100, fill: riskColor }];
   const waterfallData = buildWaterfallData(prediction);
+  const featureGlossary = Array.from(new Map(
+    [...(prediction.top_risk_increasing ?? []), ...(prediction.top_risk_decreasing ?? [])]
+      .map((item) => [item.feature, { key: item.feature, label: getFeatureLabel(item.feature), meaning: getFeatureMeaning(item.feature) }])
+  ).values());
 
   return (
     <section className={styles.card}>
       <div className={styles.header}>
         <h2>XAI Visualization</h2>
       </div>
+      <ExplainabilityIntro />
 
       <div className={styles.panels}>
         <div className={styles.panel}>
@@ -123,6 +183,7 @@ export default function XAIVisualization({ prediction, loading = false }) {
                 <CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" vertical={false} />
                 <XAxis 
                     dataKey="feature" 
+                  tickFormatter={getFeatureLabel}
                     tick={{ fill: COLORS.text, fontSize: 11, fontWeight: 500 }} 
                     interval={0} 
                     angle={-20} 
@@ -138,6 +199,7 @@ export default function XAIVisualization({ prediction, loading = false }) {
                 />
                 <Tooltip
                   cursor={{fill: 'rgba(37, 99, 235, 0.05)'}}
+                  labelFormatter={(label) => getFeatureLabel(label)}
                   contentStyle={{ 
                       background: COLORS.tooltipBg, 
                       border: `1px solid ${COLORS.tooltipBorder}`, 
@@ -162,27 +224,45 @@ export default function XAIVisualization({ prediction, loading = false }) {
       
        <div className={styles.reasons}>
         <div>
-          <h4 style={{color: COLORS.highRisk}}>Top Risk-Increasing</h4>
+          <h4 style={{color: COLORS.highRisk}}>Things Increasing Risk</h4>
           <ul>
             {(prediction.top_risk_increasing ?? []).map((r, i) => (
               <li key={`inc-${i}`}>
-                <span>{r.feature}</span>
+                <span>
+                  <span className={styles.reasonFeature}>{getFeatureLabel(r.feature)}</span>
+                  <span className={styles.reasonMeaning}>{getFeatureMeaning(r.feature)}</span>
+                </span>
                 <span style={{color: COLORS.highRisk, fontWeight: 700}}>+{r.impact.toFixed(4)}</span>
               </li>
             ))}
           </ul>
         </div>
         <div>
-          <h4 style={{color: COLORS.lowRisk}}>Top Risk-Decreasing</h4>
+          <h4 style={{color: COLORS.lowRisk}}>Things Decreasing Risk</h4>
           <ul>
             {(prediction.top_risk_decreasing ?? []).map((r, i) => (
               <li key={`dec-${i}`}>
-                <span>{r.feature}</span>
+                <span>
+                  <span className={styles.reasonFeature}>{getFeatureLabel(r.feature)}</span>
+                  <span className={styles.reasonMeaning}>{getFeatureMeaning(r.feature)}</span>
+                </span>
                 <span style={{color: COLORS.lowRisk, fontWeight: 700}}>{r.impact.toFixed(4)}</span>
               </li>
             ))}
           </ul>
         </div>
+      </div>
+
+      <div className={styles.termGlossary}>
+        <h4>What These Terms Mean</h4>
+        <ul>
+          {featureGlossary.map((term) => (
+            <li key={term.key}>
+              <strong>{term.label}</strong>
+              <span>{term.meaning}</span>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );

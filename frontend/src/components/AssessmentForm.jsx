@@ -20,26 +20,90 @@ const STEP_GROUPS = [
 ];
 
 const FIELD_LABELS = {
-  checking_status: 'Checking Status',
-  duration: 'Duration (months)',
-  credit_history: 'Credit History',
-  purpose: 'Loan Purpose',
-  credit_amount: 'Credit Amount',
-  savings_status: 'Savings Status',
-  employment: 'Employment Length',
-  installment_commitment: 'Installment Commitment',
-  personal_status: 'Personal Status',
-  other_parties: 'Other Parties',
-  residence_since: 'Residence Since',
-  property_magnitude: 'Property Magnitude',
+  checking_status: 'Money in Checking Account',
+  duration: 'Repayment Time (months)',
+  credit_history: 'Past Repayment Record',
+  purpose: 'Why You Need the Loan',
+  credit_amount: 'Loan Amount',
+  savings_status: 'Money in Savings',
+  employment: 'Time in Current Employment',
+  installment_commitment: 'Monthly Payment Burden',
+  personal_status: 'Family / Personal Status',
+  other_parties: 'Support from Other Person',
+  residence_since: 'Time at Current Home',
+  property_magnitude: 'Main Assets You Own',
   age: 'Age',
-  other_payment_plans: 'Other Payment Plans',
-  housing: 'Housing',
-  existing_credits: 'Existing Credits',
-  job: 'Job',
-  num_dependents: 'Dependents',
-  own_telephone: 'Own Telephone',
-  foreign_worker: 'Foreign Worker',
+  other_payment_plans: 'Other Ongoing Payment Plans',
+  housing: 'Living Situation',
+  existing_credits: 'Current Active Loans',
+  job: 'Work Type',
+  num_dependents: 'People Depending on Your Income',
+  own_telephone: 'Registered Telephone',
+  foreign_worker: 'Foreign Worker Status',
+};
+
+const FIELD_MEANINGS = {
+  checking_status: 'The balance range in your checking account.',
+  duration: 'How many months you plan to take to repay this loan.',
+  credit_history: 'How well you have repaid loans in the past.',
+  purpose: 'What the loan will be used for.',
+  credit_amount: 'The total amount of money you want to borrow.',
+  savings_status: 'The balance range in your savings account.',
+  employment: 'How long you have been in your current employment.',
+  installment_commitment: 'How heavy your monthly loan payments are (from low to high).',
+  personal_status: 'Your family/personal status used for credit profiling.',
+  other_parties: 'Whether someone else (co-applicant/guarantor) supports this loan.',
+  residence_since: 'How long you have lived in your current home.',
+  property_magnitude: 'Your main property/asset type (for example home, car, etc.).',
+  age: 'Your age in years.',
+  other_payment_plans: 'Whether you already have other payment plans running.',
+  housing: 'Your current living arrangement (rent/own/free).',
+  existing_credits: 'How many active loans you currently have.',
+  job: 'The type/skill level of your job.',
+  num_dependents: 'How many people rely on your income.',
+  own_telephone: 'Whether you have a registered telephone.',
+  foreign_worker: 'Whether you are recorded as a foreign worker in this dataset.',
+};
+
+const OPTION_MEANINGS = {
+  checking_status: {
+    '<0': 'Balance is below 0.',
+    '0<=X<200': 'Balance is between 0 and 200.',
+    '>=200': 'Balance is 200 or more.',
+    'no checking': 'No checking account information is available.',
+  },
+  savings_status: {
+    '<100': 'Savings are below 100.',
+    '100<=X<500': 'Savings are between 100 and 500.',
+    '500<=X<1000': 'Savings are between 500 and 1000.',
+    '>=1000': 'Savings are 1000 or more.',
+    'no known savings': 'No savings information is available.',
+  },
+  employment: {
+    unemployed: 'Currently not employed.',
+    '<1': 'Employment duration is less than 1 year.',
+    '1<=X<4': 'Employment duration is between 1 and 4 years.',
+    '4<=X<7': 'Employment duration is between 4 and 7 years.',
+    '>=7': 'Employment duration is 7 years or more.',
+  },
+  other_parties: {
+    none: 'No co-applicant or guarantor is involved.',
+    'co applicant': 'A co-applicant is applying with you.',
+    guarantor: 'A guarantor backs the loan.',
+  },
+  housing: {
+    rent: 'You currently rent your home.',
+    own: 'You own your home.',
+    'for free': 'You live without paying rent.',
+  },
+  own_telephone: {
+    none: 'No registered telephone.',
+    yes: 'Registered telephone available.',
+  },
+  foreign_worker: {
+    yes: 'Recorded as a foreign worker in this dataset.',
+    no: 'Not recorded as a foreign worker in this dataset.',
+  },
 };
 
 const NUMERIC_FIELDS = new Set([
@@ -67,22 +131,28 @@ export default function AssessmentForm({ formData, updateField, currentStep, set
   const renderField = (field) => {
     const options = FORM_SELECT_OPTIONS[field];
     const label = FIELD_LABELS[field] || field;
+    const fieldMeaning = FIELD_MEANINGS[field];
+    const selectedOptionMeaning = options ? OPTION_MEANINGS[field]?.[formData[field]] : null;
 
     return (
       <div key={field} className={styles.fieldGroup}>
         <label className={styles.label}>{label}</label>
+        {fieldMeaning ? <p className={styles.helperText}>{fieldMeaning}</p> : null}
         {options ? (
-          <select
-            className={styles.select}
-            value={formData[field]}
-            onChange={(e) => handleChange(field, e)}
-          >
-            {options.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
+          <>
+            <select
+              className={styles.select}
+              value={formData[field]}
+              onChange={(e) => handleChange(field, e)}
+            >
+              {options.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+            {selectedOptionMeaning ? <p className={styles.optionHint}>{selectedOptionMeaning}</p> : null}
+          </>
         ) : (
           <input
             className={styles.input}
