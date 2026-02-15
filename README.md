@@ -92,6 +92,50 @@ In this project, SHAP values are aggregated to business-level factors and surfac
 
 No external API keys are required for the current baseline implementation.
 
+## Deployment (Recommended): Vercel + Render split
+
+This repo is configured for **split deployment**:
+
+- **Frontend (Vite React)** on Vercel
+- **Backend (FastAPI + XGBoost/SHAP)** on Render
+
+This avoids serverless size/cold-start issues for ML-heavy Python dependencies.
+
+### Included deployment files
+
+- `vercel.json` → frontend-only Vercel static build + SPA routes
+- `render.yaml` → Render web service for FastAPI backend
+- `frontend/.env.production.example` → production env template
+
+### 1) Deploy backend on Render
+
+1. Push repo to GitHub.
+2. In Render, create service from repo using `render.yaml`.
+3. Add backend env vars in Render dashboard:
+  - `GOOGLE_CLIENT_ID`
+  - `JWT_SECRET`
+  - `JWT_ALGORITHM` (default `HS256`)
+  - `JWT_EXPIRY_MINUTES` (default `120`)
+  - `ALLOWED_ORG_DOMAINS`
+  - `ALLOWED_ANALYST_EMAILS`
+  - `ALLOWED_ADMIN_EMAILS`
+4. Deploy and copy the Render service URL (e.g. `https://credishield-xai-api.onrender.com`).
+
+### 2) Deploy frontend on Vercel
+
+1. Import the same repo in Vercel.
+2. Keep root directory as repository root.
+3. Add frontend env vars in Vercel:
+  - `VITE_API_BASE_URL=https://<your-render-backend-url>`
+  - `VITE_GOOGLE_CLIENT_ID=<your-google-client-id>`
+4. Deploy.
+
+### 3) Verify production
+
+- Open frontend URL and confirm health badge becomes online.
+- Test a prediction request.
+- Test analyst/admin login and protected endpoints.
+
 ## Analytics & Drift Readiness
 
 `history.db` stores:

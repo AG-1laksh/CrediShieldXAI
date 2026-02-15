@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: credishield-xai-api
+    env: python
+    plan: free
+    rootDir: .
+    buildCommand: |
+      pip install -r requirements.txt
+      python model_trainer.py
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRY_MINUTES
+        value: "120"
+      - key: ALLOWED_ORG_DOMAINS
+        sync: false
+      - key: ALLOWED_ANALYST_EMAILS
+        sync: false
+      - key: ALLOWED_ADMIN_EMAILS
+        sync: false
